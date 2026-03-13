@@ -1,4 +1,4 @@
-const CACHE_NAME = "penghitung-belanja-v1";
+const CACHE_NAME = "Simulasi Gear Interaktif-v1";
 
 const urlsToCache = [
   "index.html",
