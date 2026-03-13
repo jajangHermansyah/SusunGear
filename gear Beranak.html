@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulasi Gear Interaktif</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f8f8f8;
+    }
+
+    canvas {
+      background: #f0f0f0;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+      touch-action: none;
+    }
+
+    #controls {
+      background: #ddd;
+      padding: 15px;
+      border-radius: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .control-block {
+      flex: 1 1 45%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .control-block-full {
+      flex: 1 1 100%;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    label {
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    input[type="number"],
+    input[type="file"],
+    input[type="range"] {
+      padding: 5px;
+      font-size: 14px;
+      width: 100%;
+      margin-top: 4px;
+    }
+
+    button {
+      padding: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    #toggleBtn {
+      background-color: red;
+      color: white;
+      width: 100%;
+    }
+
+    #speedMultiplier {
+      width: 80%;
+    }
+
+    #speedValue {
+      display: inline-block;
+      margin-left: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gearCanvas" width="1000" height="1100"></canvas>
+
+<div id="controls">
+  <div class="control-block">
+    <label for="teethInduk">Gigi Induk:</label>
+    <input type="number" id="teethInduk" value="24" min="6">
+  </div>
+
+  <div class="control-block">
+    <label for="gearImageInduk">Gambar Induk:</label>
+    <input type="file" id="gearImageInduk" accept="image/png">
+  </div>
+
+  <div class="control-block">
+    <label for="teethAnak">Gigi Anak:</label>
+    <input type="number" id="teethAnak" value="12" min="6">
+  </div>
+
+  <div class="control-block">
+    <label for="gearImageAnak">Gambar Anak:</label>
+    <input type="file" id="gearImageAnak" accept="image/png">
+  </div>
+
+  <div class="control-block">
+    <label for="baseSpeed">Kecepatan Awal (Rad/Detik):</label>
+    <input type="number" id="baseSpeed" value="0.05" step="0.01">
+  </div>
+
+  <div class="control-block">
+    <label for="bgImageInput">Gambar Latar:</label>
+    <input type="file" id="bgImageInput" accept="image/*">
+  </div>
+
+  <div class="control-block">
+    <label>&nbsp;</label>
+    <button onclick="tambahGear()">Tambah Gear</button>
+  </div>
+
+  <div class="control-block-full">
+    <button onclick="toggleRunning()" id="toggleBtn">Matikan</button>
+  </div>
+
+  <div class="control-block-full">
+    <label>Penggali Kecepatan Global:</label>
+    <input type="range" id="speedMultiplier" min="0" max="2" step="0.01" value="1" oninput="updateMultiplier()">
+    <span id="speedValue">1.00x</span>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById("gearCanvas");
+  const ctx = canvas.getContext("2d");
+
+  let gears = [];
+  let draggingGear = null;
+  let offsetX, offsetY;
+  let isRunning = true;
+  let globalSpeedMultiplier = 1;
+
+  let tempIndukImage = null;
+  let tempAnakImage = null;
+  let backgroundImg = null;
+
+  function updateMultiplier() {
+    globalSpeedMultiplier = parseFloat(document.getElementById("speedMultiplier").value);
+    document.getElementById("speedValue").innerText = globalSpeedMultiplier.toFixed(2) + "x";
+  }
+
+  function toggleRunning() {
+    isRunning = !isRunning;
+    document.getElementById("toggleBtn").innerText = isRunning ? "Matikan" : "Nyalakan";
+  }
+
+  function loadImage(input, callback) {
+    const file = input.files[0];
+    if (file && file.type.includes("image")) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => callback(img);
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  document.getElementById("gearImageInduk").addEventListener("change", e => {
+    loadImage(e.target, img => tempIndukImage = img);
+  });
+
+  document.getElementById("gearImageAnak").addEventListener("change", e => {
+    loadImage(e.target, img => tempAnakImage = img);
+  });
+
+  document.getElementById("bgImageInput").addEventListener("change", e => {
+    loadImage(e.target, img => backgroundImg = img);
+  });
+
+  function tambahGear() {
+    const teethInduk = parseInt(document.getElementById("teethInduk").value);
+    const teethAnak = parseInt(document.getElementById("teethAnak").value);
+    const baseSpeed = parseFloat(document.getElementById("baseSpeed").value);
+    const radiusInduk = teethInduk * 2.5;
+    const radiusAnak = teethAnak * 2.5;
+    const centerX = 100 + gears.length * 160;
+    const centerY = canvas.height / 2;
+
+    let direction = 1;
+    let speed = baseSpeed;
+
+    if (gears.length > 0) {
+      speed = 0;
+      direction = 1;
+    }
+
+    const gear = {
+      x: centerX,
+      y: centerY,
+      teeth: teethInduk,
+      radius: radiusInduk,
+      image: tempIndukImage,
+      angle: 0,
+      speed: speed,
+      direction: direction,
+      anak: {
+        radius: radiusAnak,
+        teeth: teethAnak,
+        image: tempAnakImage,
+        angle: 0,
+        speed: speed,
+        direction: direction
+      },
+      connectedTo: null
+    };
+
+    gears.push(gear);
+
+    tempIndukImage = null;
+    tempAnakImage = null;
+    document.getElementById("gearImageInduk").value = "";
+    document.getElementById("gearImageAnak").value = "";
+  }
+
+  canvas.addEventListener("pointerdown", e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    for (let i = gears.length - 1; i >= 0; i--) {
+      const gear = gears[i];
+      const dx = x - gear.x;
+      const dy = y - gear.y;
+      if (Math.hypot(dx, dy) < gear.radius) {
+        draggingGear = gear;
+        offsetX = dx;
+        offsetY = dy;
+        break;
+      }
+    }
+  });
+
+  canvas.addEventListener("pointermove", e => {
+    if (draggingGear) {
+      const rect = canvas.getBoundingClientRect();
+      draggingGear.x = e.clientX - rect.left - offsetX;
+      draggingGear.y = e.clientY - rect.top - offsetY;
+    }
+  });
+
+  canvas.addEventListener("pointerup", () => draggingGear = null);
+
+  canvas.addEventListener("click", e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    for (let gear of gears) {
+      const dx = x - gear.x;
+      const dy = y - gear.y;
+      if (Math.hypot(dx, dy) < gear.radius) {
+        gear.angle += 0.5 * gear.direction;
+        gear.anak.angle += 0.5 * gear.anak.direction;
+      }
+    }
+  });
+
+  function drawGearImage(img, x, y, size, angle) {
+    if (!img) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+
+  function checkConnection(gearA, gearB) {
+    const dx = gearA.x - gearB.x;
+    const dy = gearA.y - gearB.y;
+    const dist = Math.hypot(dx, dy);
+    return dist < (gearA.radius + gearB.anak.radius);
+  }
+
+  function animate() {
+    if (backgroundImg) {
+      ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    if (isRunning) {
+      for (let i = 1; i < gears.length; i++) {
+        const gear = gears[i];
+        for (let j = 0; j < i; j++) {
+          const target = gears[j];
+          if (checkConnection(gear, target)) {
+            gear.connectedTo = target.anak;
+            gear.speed = target.anak.speed * (target.anak.teeth / gear.teeth);
+            gear.direction = -target.anak.direction;
+            gear.anak.speed = gear.speed;
+            gear.anak.direction = gear.direction;
+            break;
+          }
+        }
+      }
+
+      for (let gear of gears) {
+        gear.angle += gear.speed * gear.direction * globalSpeedMultiplier;
+        gear.anak.angle = gear.angle;
+      }
+    }
+
+    for (let gear of gears) {
+      drawGearImage(gear.image, gear.x, gear.y, gear.radius * 2, gear.angle);
+      drawGearImage(gear.anak.image, gear.x, gear.y, gear.anak.radius * 2, gear.anak.angle);
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>
+</body>
+</html>
