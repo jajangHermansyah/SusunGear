@@ -2,6 +2,14 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
+
+  <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.png">
+
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+    
   <title>Simulasi Gear Interaktif</title>
   <style>
     * {
@@ -328,5 +336,12 @@
 
   animate();
 </script>
+  <script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js')
+  .then(() => console.log("Service Worker aktif"))
+  .catch(err => console.log("SW gagal:", err));
+}
+  </script>
 </body>
 </html>
